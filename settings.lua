@@ -8,15 +8,17 @@ mod_settings = {
 		ui_name = "Stats in frames",
 		value_default = false,
 		ui_fn = function(mod_id, gui, in_main_menu, im_id, setting)
+			GuiLayoutBeginHorizontal(gui, 0, 0)
 			GuiText(gui, 0, 0, "Stats in frames: ")
-			local state = ModSettingGet("noita_engine_patcher.frames")
+			local state = ModSettingGet(mod_id .. ".frames") or false
 			if GuiButton(gui, im_id, 0, 0, tostring(state)) then
 				state = not state
-				ModSettingSetNextValue(mod_id .. "frames", state, false)
-				ModSettingSet(mod_id .. "frames", state)
+				ModSettingSetNextValue(mod_id .. ".frames", state, false)
+				ModSettingSet(mod_id .. ".frames", state)
 			end
+			GuiLayoutEnd(gui)
 		end,
-		scope = MOD_SETTING_SCOPE_RUNTIME_RESTART,
+		scope = MOD_SETTING_SCOPE_RUNTIME,
 	},
 }
 
