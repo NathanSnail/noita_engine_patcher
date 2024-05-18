@@ -13,6 +13,7 @@
 ---@field location integer? this is set when we find it at runtime.
 ---@field before integer[]?
 ---@field after integer[]?
+---@field enabled boolean?
 
 local debugging = true
 local early_logs = ""
@@ -164,6 +165,18 @@ local patches = {
 		condition = "frames",
 		range = data,
 	},
+	{
+		-- stylua: ignore start
+		target = {0x8b, 0x0d, false, false, false, false,
+		0xb8, 0xab, 0xaa, 0xaa, 0x2a, 0x2b, 0x0d, false, false, false, false,
+		0xf7, 0xe9, 0xc1, 0xfa, 0x04, 0x8b, 0xc2, 0xc1, 0xe8, 0x1f, 0x03, 0xc2, 0x83, 0xf8, 0x01, 0x76, false,
+		0xe8, false, false, false, false, 0xa1, false, false, false, false, 0xc6, 0x80, 0x20, 0x01, 0x00, 0x00,
+		0x01, },
+		-- stylua: ignore end
+		new = join(repeat_table({ false }, 50), { 0x00 }),
+		condition = "mods",
+		range = functions,
+	},
 }
 
 local function to_hex_byte(v)
@@ -201,7 +214,7 @@ end
 local function apply_patch_state(patch, page_end)
 	local location = assert(patch.location)
 	local ptr = ffi.cast("char*", patch.location)
-	local enabled = ModSettingGet("noita_engine_patcher." .. patch.condition)
+	local enabled = ModSettingGet("noita_engine_patcher." .. patch.condition) == true
 
 	local original = ffi.new("int[1]") -- malloc 4 bytes
 	VirtualProtect(ptr, #patch.new, 0x40, original) -- change page protection
@@ -222,17 +235,12 @@ local function apply_patch_state(patch, page_end)
 			patch.after[i] = patch.new[i] and patch.new[i] or ptr[i - 1]
 		end
 	end
+	if patch.enabled == enabled then
+		return
+	end
+	patch.enabled = enabled
 	local bytes = assert(enabled and patch.after or patch.before)
 
-	for k, v in ipairs(patch.before) do
-		log("B", k, v)
-	end
-	for k, v in ipairs(patch.after) do
-		log("A", k, v)
-	end
-	for k, v in ipairs(bytes) do
-		log(k, v)
-	end
 	local new_hex = {}
 	local binary = {}
 	for i = 0, #patch.new - 1 do
@@ -269,6 +277,12 @@ local function apply_patches()
 	for _, patch in ipairs(patches) do
 		patch.location = get_patch_addr(patch)
 		apply_patch_state(patch, patch.range.last)
+	end
+end
+
+function OnPausedChanged(paused)
+	if not paused then
+		apply_patches()
 	end
 end
 
