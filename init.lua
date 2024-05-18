@@ -162,7 +162,7 @@ local function to_hex_byte(v)
 	return str
 end
 
-local dissassemble = true
+local debugging = true
 local function apply_patches()
 	for _, v in ipairs(patches) do
 		if v.new == nil then
@@ -190,7 +190,7 @@ local function apply_patches()
 			byte = (byte < 0 and (256 + byte) or byte)
 			binary[k] = byte
 		end
-		if dissassemble then
+		if debugging then
 			local tmp_file = "data/noita_engine_patcher_asm"
 			local write_proc = assert(io.open(tmp_file, "wb"))
 			local bytes = string.char(unpack(binary))
@@ -206,7 +206,7 @@ local function apply_patches()
 	end
 end
 
-log(pcall(apply_patches))
+apply_patches()
 function OnWorldPostUpdate() end
 function OnPlayerSpawned()
 	print(early_logs)
