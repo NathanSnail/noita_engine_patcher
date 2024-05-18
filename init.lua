@@ -20,6 +20,8 @@ local function log(...)
 	early_logs = early_logs .. "\n"
 end
 
+local io = require("io")
+local os = require("os")
 local ffi = require("ffi")
 ffi.cdef([[
 typedef int DWORD;
@@ -53,6 +55,7 @@ int memcmp(const void *buffer1, const void *buffer2, size_t count);
 
 local info = ffi.new("SYSTEM_INFO")
 ffi.C.GetSystemInfo(info)
+---@diagnostic disable-next-line: undefined-field
 local page_size = info.dwPageSize
 
 local VirtualProtect = ffi.C.VirtualProtect
@@ -120,7 +123,7 @@ local function add_translation(key, value)
 	translations = translations .. key .. "," .. value .. ",,,,,,,,,,,,,\n"
 	ModTextFileSetContent("data/translations/common.csv", translations)
 end
-add_translation("patcher_frames", "f")
+add_translation("patcher_frames", "$0f")
 
 local functions = { first = 0x00401000, last = 0x00f05000 }
 local data = { first = 0x00f05000, last = 0x0122e000 }
@@ -150,7 +153,16 @@ local patches = {
 	},
 }
 
-local s = 0
+local function to_hex_byte(v)
+	v = (v < 0 and (256 + v) or v)
+	local str = string.format("%x", v)
+	if str:len() == 1 then
+		str = "0" .. str
+	end
+	return str
+end
+
+local dissassemble = true
 local function apply_patches()
 	for _, v in ipairs(patches) do
 		if v.new == nil then
@@ -160,16 +172,41 @@ local function apply_patches()
 			error("patch " .. v.condition .. " has mismatched target of " .. #v.target .. " and new of " .. #v.new)
 		end
 		local start = find_in_page_range(v.range.first, v.range.last, v.target)
+		if not start then
+			error("patch " .. v.condition .. " not found")
+		end
 		log(start, v.condition)
+		local new_hex = {}
+		local binary = {}
 		for i = 0, #v.new - 1 do
 			if v.new[i + 1] then
 				start[i] = ffi.new("char", v.new[i + 1])
 			end
+			new_hex[i + 1] = to_hex_byte(start[i])
+			binary[i + 1] = start[i]
+		end
+		log(unpack(new_hex))
+		for k, byte in ipairs(binary) do
+			byte = (byte < 0 and (256 + byte) or byte)
+			binary[k] = byte
+		end
+		if dissassemble then
+			local tmp_file = "data/noita_engine_patcher_asm"
+			local write_proc = assert(io.open(tmp_file, "wb"))
+			local bytes = string.char(unpack(binary))
+			write_proc:write(bytes)
+			write_proc:flush()
+			write_proc:close()
+			local asm_proc = assert(io.popen("mods/noita_engine_patcher/ndisasm.exe -u " .. tmp_file, "r"))
+			---@type string
+			local asm = assert(asm_proc:read("*a"))
+			asm_proc:close()
+			log(asm)
 		end
 	end
 end
 
-apply_patches()
+log(pcall(apply_patches))
 function OnWorldPostUpdate() end
 function OnPlayerSpawned()
 	print(early_logs)
