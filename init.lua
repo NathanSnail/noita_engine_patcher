@@ -10,8 +10,11 @@
 ---@field condition string
 ---@field range Range
 ---@field lua fun()?
----@field location ffi.cdata*? this is set when we find it at runtime.
+---@field location integer? this is set when we find it at runtime.
+---@field before integer[]?
+---@field after integer[]?
 
+local debugging = true
 local early_logs = ""
 local function log(...)
 	for _, v in ipairs({ ... }) do
@@ -21,7 +24,6 @@ local function log(...)
 end
 
 local io = require("io")
-local os = require("os")
 local ffi = require("ffi")
 ffi.cdef([[
 typedef int DWORD;
@@ -73,11 +75,19 @@ end
 ---@param page_start integer
 ---@param pattern target
 ---@param pattern_size integer
----@return ffi.cdata*?
-local function find_in_page(page_start, pattern, pattern_size)
+---@param cap integer
+---@return integer?
+local function find_in_page(page_start, pattern, pattern_size, cap)
 	local original = ffi.new("int[1]") -- malloc 4 bytes
 	VirtualProtect(ffi.cast("void*", page_start), page_size, 0x40, original) -- change page protection
-	for o = 0, page_size - 1 - pattern_size do
+	local other = ffi.new("int[1]") -- malloc 4 bytes
+	if page_start ~= cap then
+		VirtualProtect(ffi.cast("void*", page_start + page_size), page_size, 0x40, other) -- change page protection
+	end
+	for o = 0, page_size - 1 do
+		if o + page_start + pattern_size > cap then
+			return nil
+		end
 		local new = ffi.cast("char*", o + page_start)
 		local eq = true
 		for k, v in ipairs(pattern) do
@@ -87,8 +97,11 @@ local function find_in_page(page_start, pattern, pattern_size)
 			end
 		end
 		if eq then
-			return new
+			return o + page_start
 		end
+	end
+	if other then
+		VirtualProtect(ffi.cast("void*", page_start + page_size), page_size, other[0], other) -- change page protection
 	end
 	VirtualProtect(ffi.cast("void*", page_start), page_size, original[0], original) -- restore page protection
 end
@@ -96,11 +109,11 @@ end
 ---@param page_start integer
 ---@param page_end integer
 ---@param base target
----@return ffi.cdata*?
+---@return integer?
 local function find_in_page_range(page_start, page_end, base)
 	local len = #base
 	for page = page_start, page_end, page_size do
-		local res = find_in_page(page, base, len)
+		local res = find_in_page(page, base, len, page_end)
 		if res then
 			return res
 		end
@@ -162,51 +175,104 @@ local function to_hex_byte(v)
 	return str
 end
 
-local debugging = true
+---@param patch Patch
+local function get_patch_addr(patch)
+	if patch.location then
+		return patch.location
+	end
+	if patch.new == nil then
+		patch.new = repeat_table(NOP, #patch.target)
+	end
+	if #patch.target ~= #patch.new then
+		error(
+			"patch " .. patch.condition .. " has mismatched target of " .. #patch.target .. " and new of " .. #patch.new
+		)
+	end
+	local start = find_in_page_range(patch.range.first, patch.range.last, patch.target)
+	if not start then
+		error("patch " .. patch.condition .. " not found")
+	end
+	log(ffi.cast("char*", start), patch.condition)
+	return start
+end
+
+---@param patch Patch
+---@param page_end integer
+local function apply_patch_state(patch, page_end)
+	local location = assert(patch.location)
+	local ptr = ffi.cast("char*", patch.location)
+	local enabled = ModSettingGet("noita_engine_patcher." .. patch.condition)
+
+	local original = ffi.new("int[1]") -- malloc 4 bytes
+	VirtualProtect(ptr, #patch.new, 0x40, original) -- change page protection
+	local other = ffi.new("int[1]") -- malloc 4 bytes
+	if location + #patch.new < page_end then
+		VirtualProtect(ffi.cast("void*", location + #patch.new), #patch.new, 0x40, other) -- change page protection
+	end
+
+	if not patch.before then
+		patch.before = {}
+		for i = 0, #patch.new - 1 do
+			patch.before[i + 1] = ptr[i]
+		end
+	end
+	if enabled and not patch.after then
+		patch.after = {}
+		for i = 1, #patch.new do
+			patch.after[i] = patch.new[i] and patch.new[i] or ptr[i - 1]
+		end
+	end
+	local bytes = assert(enabled and patch.after or patch.before)
+
+	for k, v in ipairs(patch.before) do
+		log("B", k, v)
+	end
+	for k, v in ipairs(patch.after) do
+		log("A", k, v)
+	end
+	for k, v in ipairs(bytes) do
+		log(k, v)
+	end
+	local new_hex = {}
+	local binary = {}
+	for i = 0, #patch.new - 1 do
+		ptr[i] = ffi.new("char", bytes[i + 1])
+		new_hex[i + 1] = to_hex_byte(bytes[i + 1])
+		binary[i + 1] = bytes[i + 1]
+	end
+	log(unpack(new_hex))
+	for k, byte in ipairs(binary) do
+		byte = (byte < 0 and (256 + byte) or byte)
+		binary[k] = byte
+	end
+	if debugging then
+		local tmp_file = "data/noita_engine_patcher_asm"
+		local write_proc = assert(io.open(tmp_file, "wb"))
+		local byte_str = string.char(unpack(binary))
+		write_proc:write(byte_str)
+		write_proc:flush()
+		write_proc:close()
+		local asm_proc = assert(io.popen("mods/noita_engine_patcher/ndisasm.exe -u " .. tmp_file, "r"))
+		---@type string
+		local asm = assert(asm_proc:read("*a"))
+		asm_proc:close()
+		log(asm)
+	end
+
+	if other then
+		VirtualProtect(ffi.cast("void*", location + #patch.new), #patch.new, other[0], other) -- change page protection
+	end
+	VirtualProtect(ptr, #patch.new, original[0], original) -- restore page protection
+end
+
 local function apply_patches()
-	for _, v in ipairs(patches) do
-		if v.new == nil then
-			v.new = repeat_table(NOP, #v.target)
-		end
-		if #v.target ~= #v.new then
-			error("patch " .. v.condition .. " has mismatched target of " .. #v.target .. " and new of " .. #v.new)
-		end
-		local start = find_in_page_range(v.range.first, v.range.last, v.target)
-		if not start then
-			error("patch " .. v.condition .. " not found")
-		end
-		log(start, v.condition)
-		local new_hex = {}
-		local binary = {}
-		for i = 0, #v.new - 1 do
-			if v.new[i + 1] then
-				start[i] = ffi.new("char", v.new[i + 1])
-			end
-			new_hex[i + 1] = to_hex_byte(start[i])
-			binary[i + 1] = start[i]
-		end
-		log(unpack(new_hex))
-		for k, byte in ipairs(binary) do
-			byte = (byte < 0 and (256 + byte) or byte)
-			binary[k] = byte
-		end
-		if debugging then
-			local tmp_file = "data/noita_engine_patcher_asm"
-			local write_proc = assert(io.open(tmp_file, "wb"))
-			local bytes = string.char(unpack(binary))
-			write_proc:write(bytes)
-			write_proc:flush()
-			write_proc:close()
-			local asm_proc = assert(io.popen("mods/noita_engine_patcher/ndisasm.exe -u " .. tmp_file, "r"))
-			---@type string
-			local asm = assert(asm_proc:read("*a"))
-			asm_proc:close()
-			log(asm)
-		end
+	for _, patch in ipairs(patches) do
+		patch.location = get_patch_addr(patch)
+		apply_patch_state(patch, patch.range.last)
 	end
 end
 
-apply_patches()
+log(pcall(apply_patches))
 function OnWorldPostUpdate() end
 function OnPlayerSpawned()
 	print(early_logs)
