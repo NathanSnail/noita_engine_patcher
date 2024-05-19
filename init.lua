@@ -15,7 +15,7 @@
 ---@field after integer[]?
 ---@field enabled boolean?
 
-local debugging = true
+local debugging = ModSettingGet("noita_engine_patcher.debug") == true
 local early_logs = ""
 local function log(...)
 	for _, v in ipairs({ ... }) do
@@ -82,7 +82,7 @@ local function find_in_page(page_start, pattern, pattern_size, cap)
 	local original = ffi.new("int[1]") -- malloc 4 bytes
 	VirtualProtect(ffi.cast("void*", page_start), page_size, 0x40, original) -- change page protection
 	local other = ffi.new("int[1]") -- malloc 4 bytes
-	if page_start ~= cap then
+	if page_start + page_size < cap then
 		VirtualProtect(ffi.cast("void*", page_start + page_size), page_size, 0x40, other) -- change page protection
 	end
 	for o = 0, page_size - 1 do
@@ -286,8 +286,13 @@ function OnPausedChanged(paused)
 	end
 end
 
-log(pcall(apply_patches))
-function OnWorldPostUpdate() end
+if debugging then
+	io.popen("Z:\\home\\nathan\\Documents\\misc_tools\\CE\\Cheat_Engine.exe")
+	log(pcall(apply_patches))
+else
+	apply_patches()
+end
+
 function OnPlayerSpawned()
 	print(early_logs)
 end
