@@ -6,7 +6,7 @@
 
 ---@class (exact) Patch
 ---@field target target
----@field new integer[]?
+---@field new target?
 ---@field condition string
 ---@field range Range
 ---@field lua fun()?
@@ -63,6 +63,9 @@ local page_size = info.dwPageSize
 
 local VirtualProtect = ffi.C.VirtualProtect
 
+---@param values any[]
+---@param count integer
+---@return table
 local function repeat_table(values, count)
 	local new = {}
 	for _ = 1, count do
@@ -174,6 +177,27 @@ local patches = {
 		0x01, },
 		-- stylua: ignore end
 		new = join(repeat_table({ false }, 50), { 0x00 }),
+		condition = "mods",
+		range = functions,
+	},
+	{
+		-- stylua: ignore start
+		target = {
+		0xe8, false, false, false, false,
+		0x84, 0xc0,
+		false, false, false, false, false, false,
+		0x83, 0xbd, 0xbc, 0xfc, 0xff, 0xff, 0x01,
+		0x7c, false,
+		0x8b, 0x85, 0x4c, 0xfe, 0xff, 0xff,
+		0x85, 0xc0,
+		0x7e, false,
+		0x39, 0x85, 0xf4, 0xfb, 0xff, 0xff,
+		0x7c, false,
+		0xb3, 0x01,
+		0xeb, false,
+		0x32, 0xdb, 0x68, },
+		-- stylua: ignore end
+		new = join(repeat_table({ false }, 7), repeat_table(NOP, 6), repeat_table({ false }, 34)),
 		condition = "mods",
 		range = functions,
 	},
