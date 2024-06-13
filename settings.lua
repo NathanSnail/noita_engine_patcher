@@ -27,6 +27,7 @@ mod_settings = {
 	generate_setting("frames", "Stats in frames"),
 	generate_setting("mods", "Disable mod restrictions"),
 	generate_setting("debug", "Debug logs"),
+	generate_setting("freeze_melee", "Freeze melee nerf"),
 }
 
 -- This function is called to ensure the correct setting values are visible to the game. your mod's settings don't work if you don't have a function like this defined in settings.lua.
