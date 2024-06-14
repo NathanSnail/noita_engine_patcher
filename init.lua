@@ -1,4 +1,5 @@
----@alias target (integer|boolean)[]
+---@alias target (integer|false)[]
+---@alias generator target|(fun(self: Patch, location: integer): target)
 
 ---@class (exact) Range
 ---@field first integer
@@ -6,14 +7,14 @@
 
 ---@class (exact) Patch
 ---@field target target
----@field new target?
+---@field new generator?
 ---@field condition string
 ---@field range Range
----@field lua fun()?
 ---@field location integer? this is set when we find it at runtime.
 ---@field before integer[]?
 ---@field after integer[]?
 ---@field enabled boolean?
+---@field data table<any, any>?
 
 local debugging = ModSettingGet("noita_engine_patcher.debug") == true
 local early_logs = ""
@@ -52,6 +53,7 @@ typedef struct _SYSTEM_INFO {
 } SYSTEM_INFO, *LPSYSTEM_INFO;
 
 bool VirtualProtect(void* adress, size_t size, int new_protect, int* old_protect);
+void* VirtualAlloc(void* lpAddress, size_t dwSize, uint32_t flAllocationType, uint32_t flProtect);
 void GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 int memcmp(const void *buffer1, const void *buffer2, size_t count);
 ]])
@@ -204,9 +206,57 @@ local patches = {
 	{
 		-- stylua: ignore start
 		target = { 0x84, 0xc0, 0x8b, 0x44, 0x24, 0x44, 0x74, 0x26, 0xf2, 0x0f, 0x10, 0x40, 0x50, 0xf2, 0x0f, 0x59, 0x05, 0x48, 0x17, 0x05, 0x01, 0xf2, 0x0f, 0x10, 0x48, 0x48, 0x66, 0x0f, 0x2f, 0xc8, 0x76, 0x0e, 0x66, 0x0f, 0x5a, 0xc1, 0xf3, 0x0f, 0x59, 0x05, 0x4c, 0x14, 0x05, 0x01, 0xeb, 0x09, 0xf2, 0x0f, 0x10, 0x40, 0x48, 0x66, 0x0f, 0x5a, 0xc0 },
-		new = join({ 0x84, 0xC0, 0x8B, 0x44, 0x24, 0x44, 0xF3, 0x0F, 0x10, 0x44, 0x24, 0x18, 0x75, 0x13, 0xF2, 0x0F, 0x10, 0x40, 0x50, 0x66, 0x0F, 0x5A, 0xC0, 0xF3, 0x0F, 0x59, 0x05, 0xEC, 0x14, 0x05, 0x01, 0xEB, 0x08, 0xF3, 0x0F, 0x59, 0x05, 0xAC, 0x05, 0x15, 0x01},
-		repeat_table(NOP, 14)), -- from freeze_melee.asm
 		--stylua: ignore end
+		new = function(self, location)
+			if not self.data then
+				self.data = {}
+			end
+			---@type ffi.cdata*
+			self.data.memory = ffi.C.VirtualAlloc(nil, 8, 0x3000, 0x40)
+			log("freezer")
+			log(self.data.memory)
+			local float_writer = ffi.cast("float *", self.data.memory)
+			local addr = tonumber(ffi.cast("int", float_writer)) or 0
+			float_writer[0] = 0.75
+			float_writer[1] = 5.0
+			local bytes_75 = {}
+			local bytes_5 = {}
+			for i = 1, 4 do
+				bytes_75[i] = bit.band(bit.rshift(addr, (i - 1) * 8), 0xFF)
+				bytes_5[i] = bit.band(bit.rshift(addr + 4, (i - 1) * 8), 0xFF)
+			end
+			return join({
+				0x84,
+				0xC0,
+				0x8B,
+				0x44,
+				0x24,
+				0x44,
+				0xF3,
+				0x0F,
+				0x10,
+				0x44,
+				0x24,
+				0x18,
+				0x75,
+				0x13,
+				0xF2,
+				0x0F,
+				0x10,
+				0x40,
+				0x50,
+				0x66,
+				0x0F,
+				0x5A,
+				0xC0,
+				0xF3,
+				0x0F,
+				0x59,
+				0x05,
+			}, bytes_75, { 0xEB, 0x08, 0xF3, 0x0F, 0x59, 0x05 }, bytes_5, repeat_table(NOP, 14))
+		end,
+		--join({ 0x84, 0xC0, 0x8B, 0x44, 0x24, 0x44, 0xF3, 0x0F, 0x10, 0x44, 0x24, 0x18, 0x75, 0x13, 0xF2, 0x0F, 0x10, 0x40, 0x50, 0x66, 0x0F, 0x5A, 0xC0, 0xF3, 0x0F, 0x59, 0x05, 0xEC, 0x14, 0x05, 0x01, 0xEB, 0x08, 0xF3, 0x0F, 0x59, 0x05, 0xAC, 0x05, 0x15, 0x01},
+		--repeat_table(NOP, 14)), -- from freeze_melee.asm
 		condition = "freeze_melee",
 		range = functions,
 	},
@@ -229,10 +279,17 @@ local function get_patch_addr(patch)
 	if patch.new == nil then
 		patch.new = repeat_table(NOP, #patch.target)
 	end
-	if #patch.target ~= #patch.new then
-		error(
-			"patch " .. patch.condition .. " has mismatched target of " .. #patch.target .. " and new of " .. #patch.new
-		)
+	if type(patch.new) == "table" then
+		if #patch.target ~= #patch.new then
+			error(
+				"patch "
+					.. patch.condition
+					.. " has mismatched target of "
+					.. #patch.target
+					.. " and new of "
+					.. #patch.new
+			)
+		end
 	end
 	local start = find_in_page_range(patch.range.first, patch.range.last, patch.target)
 	if not start then
@@ -250,22 +307,41 @@ local function apply_patch_state(patch, page_end)
 	local enabled = ModSettingGet("noita_engine_patcher." .. patch.condition) == true
 
 	local original = ffi.new("int[1]") -- malloc 4 bytes
-	VirtualProtect(ptr, #patch.new, 0x40, original) -- change page protection
+	VirtualProtect(ptr, #patch.target, 0x40, original) -- change page protection
 	local other = ffi.new("int[1]") -- malloc 4 bytes
-	if location + #patch.new < page_end then
-		VirtualProtect(ffi.cast("void*", location + #patch.new), #patch.new, 0x40, other) -- change page protection
+	if location + #patch.target < page_end then
+		VirtualProtect(ffi.cast("void*", location + #patch.target), #patch.target, 0x40, other) -- change page protection
 	end
+	---@type target
+	local new
+	if type(patch.new) == "function" then
+		new = patch:new(patch.location)
+	else
+		---@diagnostic disable-next-line: cast-local-type
+		new = patch.new
+	end
+	if #new ~= #patch.target then
+		error(
+			"invalid function patch length generated for "
+				.. patch.condition
+				.. "\ngot: "
+				.. #new
+				.. " expected: "
+				.. #patch.target
+		)
+	end
+	---@cast new target
 
 	if not patch.before then
 		patch.before = {}
-		for i = 0, #patch.new - 1 do
+		for i = 0, #new - 1 do
 			patch.before[i + 1] = ptr[i]
 		end
 	end
 	if enabled and not patch.after then
 		patch.after = {}
-		for i = 1, #patch.new do
-			patch.after[i] = patch.new[i] and patch.new[i] or ptr[i - 1]
+		for i = 1, #new do
+			patch.after[i] = new[i] and new[i] or ptr[i - 1]
 		end
 	end
 	if patch.enabled == enabled then
@@ -276,7 +352,7 @@ local function apply_patch_state(patch, page_end)
 
 	local new_hex = {}
 	local binary = {}
-	for i = 0, #patch.new - 1 do
+	for i = 0, #new - 1 do
 		ptr[i] = ffi.new("char", bytes[i + 1])
 		new_hex[i + 1] = to_hex_byte(bytes[i + 1])
 		binary[i + 1] = bytes[i + 1]
@@ -301,9 +377,9 @@ local function apply_patch_state(patch, page_end)
 	end
 
 	if other then
-		VirtualProtect(ffi.cast("void*", location + #patch.new), #patch.new, other[0], other) -- change page protection
+		VirtualProtect(ffi.cast("void*", location + #patch.target), #patch.target, other[0], other) -- change page protection
 	end
-	VirtualProtect(ptr, #patch.new, original[0], original) -- restore page protection
+	VirtualProtect(ptr, #patch.target, original[0], original) -- restore page protection
 end
 
 local function apply_patches()
