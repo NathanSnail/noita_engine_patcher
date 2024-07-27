@@ -215,7 +215,7 @@ local patches = {
 		},
 		condition = "mods",
 		range = functions,
-		new = join({ 0x32, 0xc0, 0xc3 }, repeat_table({ NOP }, 25)),
+		new = join({ 0x32, 0xc0, 0xc3 }, repeat_table(NOP, 25)),
 	},
 	{
 		-- stylua: ignore start
