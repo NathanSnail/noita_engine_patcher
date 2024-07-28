@@ -171,6 +171,7 @@ local patches = {
 		range = data,
 	},
 	{
+		-- world state setter
 		-- stylua: ignore start
 		target = {0x8b, 0x0d, false, false, false, false,
 		0xb8, 0xab, 0xaa, 0xaa, 0x2a, 0x2b, 0x0d, false, false, false, false,
@@ -183,6 +184,7 @@ local patches = {
 		range = functions,
 	},
 	{
+		-- misc func
 		target = {
 			0x8b,
 			0x0d,
@@ -216,6 +218,45 @@ local patches = {
 		condition = "mods",
 		range = functions,
 		new = join({ 0x32, 0xc0, 0xc3 }, repeat_table(NOP, 25)),
+	},
+	{ -- game over menu
+		target = {
+			0x8b,
+			0x0d,
+			false,
+			false,
+			false,
+			false,
+			0xb8,
+			0xab,
+			0xaa,
+			0xaa,
+			0x2a,
+			0x2b,
+			0x0d,
+			false,
+			false,
+			false,
+			false,
+			0xf7,
+			0xe9,
+			0xb9,
+			0x01,
+			0x00,
+			0x00,
+			0x00,
+			0xc1,
+			0xfa,
+			0x04,
+			0x8b,
+			0xc2,
+			0xc1,
+			0xe8,
+			0x1f,
+		},
+		condition = "mods",
+		range = functions,
+		new = join({ 0x32, 0xc0, 0xc3 }, repeat_table(NOP, 29)),
 	},
 	{
 		-- stylua: ignore start
