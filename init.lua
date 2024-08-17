@@ -16,6 +16,22 @@
 ---@field enabled boolean?
 ---@field data table<any, any>?
 
+---@param str string
+---@param null_count integer?
+---@return integer[] bytes
+local function to_bytes(str, null_count)
+	local bytes = {}
+	for char in str:gmatch(".") do
+		table.insert(bytes, char:byte())
+	end
+	if null_count then
+		for _ = 1, null_count do
+			table.insert(bytes, 0x00)
+		end
+	end
+	return bytes
+end
+
 local debugging = ModSettingGet("noita_engine_patcher.debug") == true
 local early_logs = ""
 local function log(...)
@@ -143,6 +159,7 @@ local function add_translation(key, value)
 	ModTextFileSetContent("data/translations/common.csv", translations)
 end
 add_translation("patcher_frames", "$0f")
+add_translation("patcher_wand", "Wand recharge: $0f")
 
 local functions = { first = 0x00401000, last = 0x00f05000 }
 local data = { first = 0x00f05000, last = 0x0122e000 }
@@ -163,10 +180,16 @@ local patches = {
 		range = functions,
 	},
 	{
-		-- stylua: ignore start 
-		target = { 0x24, 0x69, 0x6e, 0x76, 0x65, 0x6e, 0x74, 0x6f, 0x72, 0x79, 0x5f, 0x73, 0x65, 0x63, 0x6f, 0x6e, 0x64, 0x73, 0x00, },
-		new =    { 0x24, 0x70, 0x61, 0x74, 0x63, 0x68, 0x65, 0x72, 0x5f, 0x66, 0x72, 0x61, 0x6d, 0x65, 0x73, 0x00, 0x00, 0x00, 0x00, },
-		-- stylua: ignore end
+		target = to_bytes("$inventory_seconds", 1),
+		--stylua: ignore
+		new =    to_bytes("$patcher_frames", 4),
+		condition = "frames",
+		range = data,
+	},
+	{
+		target = to_bytes("$hud_wand_reload", 1),
+		--stylua: ignore
+		new =    to_bytes("$patcher_wand", 4),
 		condition = "frames",
 		range = data,
 	},
