@@ -81,9 +81,9 @@ local page_size = info.dwPageSize
 
 local VirtualProtect = ffi.C.VirtualProtect
 
----@param values any[]
+---@param values target
 ---@param count integer
----@return table
+---@return target
 local function repeat_table(values, count)
 	local new = {}
 	for _ = 1, count do
@@ -198,6 +198,36 @@ local patches = {
 			{ 0xd4, 0x84, 0x20, 0xff }
 		),
 		condition = "eyes",
+		range = functions,
+	},
+	{
+		-- stylua: ignore start
+		target = {0x99, 0xf7, 0xf9, 0x83, 0xfa, 0x05, 0x7d, 0x30, 0x8d, 0x8f, 0xac, 0x00, 0x00, 0x00, 0xc7, 0x47, 0x64, 0xff, 0xff, 0xff, 0xff, false, false, false, false, false, 0xeb, 0x1c},
+		-- stylua: ignore end
+		new = join(
+			{
+				0x99,
+				0xf7,
+				0xf9,
+				0x83,
+				0xfa,
+				0x05,
+				0x7d,
+				0x30,
+				0x8d,
+				0x8f,
+				0xac,
+				0x00,
+				0x00,
+				0x00,
+			},
+			repeat_table(NOP, 12),
+			{
+				0xeb,
+				0x1c,
+			}
+		),
+		condition = "poly",
 		range = functions,
 	},
 	{

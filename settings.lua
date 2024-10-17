@@ -29,6 +29,7 @@ mod_settings = {
 	generate_setting("debug", "Debug logs"),
 	generate_setting("freeze_melee", "Freeze melee nerf"),
 	generate_setting("eyes", "Eyes render as circles (silly)"),
+	generate_setting("poly", "Disable permanent poly from polying too much"),
 }
 
 -- This function is called to ensure the correct setting values are visible to the game. your mod's settings don't work if you don't have a function like this defined in settings.lua.
