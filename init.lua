@@ -422,6 +422,7 @@ local patches = {
 				bytes_75[i] = bit.band(bit.rshift(addr, (i - 1) * 8), 0xFF)
 				bytes_5[i] = bit.band(bit.rshift(addr + 4, (i - 1) * 8), 0xFF)
 			end
+			-- derived from freeze_melee.asm, magic addresses are constructed at runtime
 			return join({
 				0x84,
 				0xC0,
