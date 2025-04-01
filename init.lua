@@ -47,6 +47,7 @@ ffi.cdef([[
 typedef int DWORD;
 typedef short WORD;
 typedef void* LPVOID;
+typedef char* LPCSTR;
 typedef int* DWORD_PTR;
 
 typedef struct _SYSTEM_INFO {
@@ -72,6 +73,7 @@ bool VirtualProtect(void* adress, size_t size, int new_protect, int* old_protect
 void* VirtualAlloc(void* lpAddress, size_t dwSize, uint32_t flAllocationType, uint32_t flProtect);
 void GetSystemInfo(LPSYSTEM_INFO lpSystemInfo);
 int memcmp(const void *buffer1, const void *buffer2, size_t count);
+void* GetModuleHandleA(LPCSTR lpModuleName);
 ]])
 
 local info = ffi.new("SYSTEM_INFO")
@@ -161,8 +163,11 @@ end
 add_translation("patcher_frames", "$0f")
 add_translation("patcher_wand", "Wand recharge: $0f")
 
-local functions = { first = 0x00401000, last = 0x00f05000 }
-local data = { first = 0x00f05000, last = 0x0122e000 }
+local base_addr = tonumber(ffi.cast("unsigned long long", ffi.C.GetModuleHandleA(nil)))
+local old_base = 0x00400000
+local shift = base_addr - old_base -- fixes security protection breaking things
+local functions = { first = shift + 0x00401000, last = shift + 0x00f05000 }
+local data = { first = shift + 0x00f05000, last = shift + 0x0122e000 }
 
 local NOP = { 0x90 }
 
