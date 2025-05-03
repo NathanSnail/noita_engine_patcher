@@ -14,7 +14,7 @@ Contains various engine patches for Noita to change certain features
 
 ### Download
 Either:
-* Press Code -> Download zip, unzip it and place it into your Noita mods folder so that the path looks like `Noita/mods/noita_engine_patcher/init.lua`. Note that the name matters.
+* Press Code → Download zip, unzip it and place it into your Noita mods folder so that the path looks like `Noita/mods/noita_engine_patcher/init.lua`. Note that the name matters.
 * Run `git clone https://github.com/NathanSnail/noita_engine_patcher.git` inside your mods folder.
 
 After downloading enable unsafe mods in game and enable the mod, then configure the patches you want in mod settings.
