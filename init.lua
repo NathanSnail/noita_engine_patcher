@@ -463,6 +463,33 @@ local patches = {
 		condition = "freeze_melee",
 		range = functions,
 	},
+	{
+		target = {
+			0x8b,
+			0x33,
+			0xff,
+			0x50,
+			0x60,
+			0x03,
+			0xc6,
+			0x33,
+			0xd2,
+			0xb9,
+			0x0f,
+			0x00,
+			0x00,
+			0x00,
+			0xf7,
+			0xf1,
+			0x85,
+			0xd2,
+			0x0f,
+			0x85,
+		},
+		new = join(repeat_table({ false }, 18), NOP, { 0xe9 }), -- jnz .... -> nop jmp ....
+		condition = "regen",
+		range = functions,
+	},
 }
 
 local function to_hex_byte(v)
