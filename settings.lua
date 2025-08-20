@@ -30,7 +30,7 @@ mod_settings = {
 	generate_setting("freeze_melee", "Freeze melee nerf, 0.75x of max hp for enemies and 5x damage on player"),
 	generate_setting("eyes", "Eyes render as circles (silly)"),
 	generate_setting("poly", "Disable permanent poly from polying too much"),
-	generate_setting("regen", "Regeneration ticking sound effect"),
+	generate_setting("regen", "Disable regeneration ticking sound effect"),
 }
 
 -- This function is called to ensure the correct setting values are visible to the game. your mod's settings don't work if you don't have a function like this defined in settings.lua.
