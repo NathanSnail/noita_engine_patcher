@@ -26,7 +26,8 @@ end
 mod_settings = {
 	generate_setting("frames", "Stats in frames"),
 	generate_setting("mods", "Disable mod restrictions"),
-	generate_setting("debug", "Debug logs"),
+	generate_setting("debug", "Debug tools"),
+	generate_setting("logs", "Debug logs"),
 	generate_setting("freeze_melee", "Freeze melee nerf, 0.75x of max hp for enemies and 5x damage on player"),
 	generate_setting("eyes", "Eyes render as circles (silly)"),
 	generate_setting("poly", "Disable permanent poly from polying too much"),

@@ -33,6 +33,7 @@ local function to_bytes(str, null_count)
 end
 
 local debugging = ModSettingGet("noita_engine_patcher.debug") == true
+local logs = ModSettingGet("noita_engine_patcher.logs") == true
 local early_logs = ""
 local function log(...)
 	for _, v in ipairs({ ... }) do
@@ -633,5 +634,7 @@ else
 end
 
 function OnPlayerSpawned()
-	print(early_logs)
+	if logs then
+		print(early_logs)
+	end
 end
